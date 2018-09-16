@@ -48,6 +48,8 @@ def readStartLine(sock):
 				return startLine.decode("utf-8")
 			else:
 				raise SyntaxError("Received LF before CR")
+		if(expectingLF):
+			logging.debug("Received CHAR when expecting LF")
 		startLine.append(chunk)
 
 def readNextHeader(sock):
@@ -63,6 +65,8 @@ def readNextHeader(sock):
 		if(chunk == '\r'):
 			if not expectingLF:
 				expectingLF = True
+			if expectingLF:
+				logging.debug("Received CR when expecting LF")
 		if(chunk == '\n'):
 			if expectingLF:
 				if not haveKey:
@@ -100,8 +104,15 @@ def readBody(sock, contentLength):
 			print e
 
 
-def buildResponse(requestHeaders, requestBody):
-	return "Hello World"
+def buildResponse(startLine, requestHeaders, requestBody):
+	startArray = startLine.split(" ")
+	version = startArray[2]
+	statusLine = version.rstrip() + " 200 OK"
+	body = "Hello World"
+	contentLength = "Content-Length: " + str(len(body))
+	contentType = "Content-Type: text/html"
+	response = statusLine + "\r\n" + contentLength + "\r\n" + contentType + "\r\n\r\n"
+	return (response, body)
 
 
 def run():
@@ -118,9 +129,10 @@ def run():
 		print request.headers
 		print request.startLine
 
-		response = buildResponse(request.headers, body)
+		(response, body) = buildResponse(request.startLine, request.headers, body)
 
 		clientsocket.send(response)
+		clientsocket.send(body)
 		logging.info('Sent response')
 		clientsocket.close()
 
