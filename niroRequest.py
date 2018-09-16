@@ -3,8 +3,9 @@ class niroRequest:
 
 	headers = {}
 	body = ''
+	startLine = ""
 
-	def __init__(self, firstHeader):
-		headers = {}
-		body = ''
-		headers["VERB"] = firstHeader
+	def __init__(self, startLine, headers):
+		self.headers = headers 
+		self.startLine = startLine
+
