@@ -4,6 +4,7 @@ import errno
 from time import sleep
 import re
 from niroRequest import niroRequest
+import mockRouter
 
 
 
@@ -18,7 +19,6 @@ logging.info("Server started...")
 
 def readRequest(sock):
 	headers = {}
-	currentLine = bytearray()
 	chunk = 'CURRENT_BYTE'
 	startLine = readStartLine(sock)
 	while 1:		
@@ -40,8 +40,7 @@ def readStartLine(sock):
 			if not expectingLF:
 				expectingLF = True
 			if expectingLF:
-				print startLine.decode("utf-8")
-				#raise SyntaxError("Received CR when expecting LF")
+				logging.debug("Received CR when expecting LF for START LINE PARSING")
 		if(chunk == '\n'):
 			if expectingLF:
 				startLine.append(chunk)
@@ -49,7 +48,7 @@ def readStartLine(sock):
 			else:
 				raise SyntaxError("Received LF before CR")
 		if(expectingLF):
-			logging.debug("Received CHAR when expecting LF")
+			logging.debug("Received CHAR when expecting LF for START LINE PARSING")
 		startLine.append(chunk)
 
 def readNextHeader(sock):
@@ -115,6 +114,7 @@ def buildResponse(startLine, requestHeaders, requestBody):
 	return (response, body)
 
 
+
 def run():
 	while 1:
 		(clientsocket, address) = serversocket.accept()
@@ -129,10 +129,11 @@ def run():
 		print request.headers
 		print request.startLine
 
-		(response, body) = buildResponse(request.startLine, request.headers, body)
+		#(response, body) = buildResponse(request)
+		response = mockRouter.buildResponse(request)
 
-		clientsocket.send(response)
-		clientsocket.send(body)
+		clientsocket.send(response.buildHeaders())
+		clientsocket.send(response.getBody())
 		logging.info('Sent response')
 		clientsocket.close()
 
