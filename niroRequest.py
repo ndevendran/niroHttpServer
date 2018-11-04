@@ -12,11 +12,12 @@ class niroRequest:
 		self.startLine = startLine
 
 
-	def getPath():
+	def getPath(self):
 		# get path from startline
 		if(self.startLine != None):
 			result = re.match("([A-Za-z]+) (.*) HTTP/[0-9]\.[0-9]", self.startLine)
-			return result.group(2)
+			result = result.group(2)
+			return result
 		else:
 			return None
 
