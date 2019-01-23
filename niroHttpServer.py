@@ -9,7 +9,7 @@ import mockRouter
 
 
 serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-CHUNK_SIZE = 1
+CHUNK_SIZE = 2
 
 serversocket.bind(('127.0.0.1', 8080))
 serversocket.listen(5)
@@ -19,9 +19,8 @@ logging.info("Server started...")
 
 def readRequest(sock):
 	headers = {}
-	chunk = 'CURRENT_BYTE'
 	startLine = readStartLine(sock)
-	while 1:		
+	while 1:	
 		(key, header) = readNextHeader(sock)
 		if(header == None):
 			#read all headers
@@ -32,57 +31,41 @@ def readRequest(sock):
 	return newRequest
 
 def readStartLine(sock):
-	startLine = bytearray()
+	startLine = ""
 	expectingLF = False
-	while 1:
-		chunk = sock.recv(CHUNK_SIZE)
-		if(chunk == '\r'):
-			if not expectingLF:
-				expectingLF = True
-			if expectingLF:
-				logging.debug("Received CR when expecting LF for START LINE PARSING")
-		if(chunk == '\n'):
-			if expectingLF:
-				startLine.append(chunk)
-				return startLine.decode("utf-8")
-			else:
-				raise SyntaxError("Received LF before CR")
-		if(expectingLF):
-			logging.debug("Received CHAR when expecting LF for START LINE PARSING")
-		startLine.append(chunk)
+	chunk = sock.recv(CHUNK_SIZE).decode("utf-8")
+	while len(chunk):	
+		startLine += chunk
+		if '\r\n' in startLine:
+			return startLine
+		chunk = sock.recv(CHUNK_SIZE).decode("utf-8")
+
+	return None
 
 def readNextHeader(sock):
 	#code to read header here
-	headerKey = bytearray()
-	headerValue = bytearray()
-	keyString = ""
-	valueString = ""
-	expectingLF = False
+	headerKey = ""
+	headerValue = ""
 	haveKey = False
-	while 1:
-		chunk = sock.recv(CHUNK_SIZE)
-		if(chunk == '\r'):
-			if not expectingLF:
-				expectingLF = True
-			if expectingLF:
-				logging.debug("Received CR when expecting LF")
-		if(chunk == '\n'):
-			if expectingLF:
-				if not haveKey:
-					return (None,None)
-				else:
-					headerValue.append(chunk)
-					valueString = headerValue.decode("utf-8")
-					keyString = headerKey.decode("utf-8")
-					return (keyString, valueString)
-		if(chunk == ':'):
-			if not haveKey:
-				haveKey = True
-				continue
-		if haveKey:
-			headerValue.append(chunk)
+	while not haveKey:
+		print("Parsing header keys...")
+		chunk = sock.recv(CHUNK_SIZE).decode("utf-8")
+		if '\r\n' in chunk:
+			print("Returning none...")
+			return (None, None)
+		if chunk == ':':
+			haveKey = True
 		else:
-			headerKey.append(chunk)
+			headerKey += chunk
+
+	while '\r\n' not in headerValue:
+		print("Parsing header value...")
+		chunk = sock.recv(CHUNK_SIZE).decode("utf-8")
+		if not chunk:
+			return (None, None)
+		headerValue += chunk
+
+	return (headerKey, headerValue)
 
 
 
@@ -92,15 +75,15 @@ def readBody(sock, contentLength):
 	# Given a content length read next message
 	try:
 		chunk = sock.recv(contentLength)
-		print "Received %d bytes" % (len(chunk))
-		print "Expected %d bytes" % (contentLength)
-	except socket.error, e:
+		print("Received %d bytes" % (len(chunk)))
+		print("Expected %d bytes" % (contentLength))
+	except e:
 		err = e.args[0]
 		if err == errno.EAGAIN or err == errno.EWOULDBLOCK:
 			sleep(1)
-			print 'No data available'
+			print('No data available')
 		else:
-			print e
+			print(e)
 
 
 def buildResponse(startLine, requestHeaders, requestBody):
@@ -120,20 +103,22 @@ def run():
 		(clientsocket, address) = serversocket.accept()
 		logging.info('Got connection')
 		request = readRequest(clientsocket)
+		print("Read in request...")
 		body = ""
 		contentLengthKey = "Content-Length"
 		if contentLengthKey in request.headers:
 			messageLength = headers[contentLengthKey]
 			body = readBody(clientsocket, messageLength)
 
-		print request.headers
-		print request.startLine
+		print(request.headers)
+		print(request.startLine)
 
 		#(response, body) = buildResponse(request)
-		response = mockRouter.buildResponse(request)
-
-		clientsocket.send(response.buildHeaders())
-		clientsocket.send(response.getBody())
+		router = mockRouter.Router()
+		targetModule = __import__('mockRouter', globals(), locals(), [], 0)
+		response = router.buildResponseFromTupleDict(request, targetModule)
+		clientsocket.send(response.buildHeaders().encode())
+		clientsocket.send(response.getBody().encode())
 		logging.info('Sent response')
 		clientsocket.close()
 
